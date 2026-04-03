@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>农场作物成熟时间计算工具</title>
+    <!-- 百度统计：建议放在全站通用 head 模板中（如 header.htm）实现一处安装全站生效 -->
+    <script>
+      var _hmt = _hmt || [];
+      (function () {
+        var hm = document.createElement("script");
+        // 可修改：将 src 中 hm.js 后面的站点 ID 替换为你的百度统计 ID
+        hm.src = "https://hm.baidu.com/hm.js?dde7c2c07ea0e8876089e02eb3ac4872";
+        var s = document.getElementsByTagName("script")[0];
+        s.parentNode.insertBefore(hm, s);
+      })();
+    </script>
+    <style>
+      :root {
+        --bg: #f6f8fa;
+        --card: #ffffff;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --line: #d1d5db;
+        --ok: #166534;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      .wrap {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+      }
+
+      .card {
+        width: 100%;
+        max-width: 520px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 18px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+      }
+
+      h1 {
+        margin: 0 0 6px;
+        font-size: 1.25rem;
+      }
+
+      .sub {
+        margin: 0 0 14px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .field {
+        margin-bottom: 12px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 0.92rem;
+      }
+
+      select,
+      input {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 0.95rem;
+      }
+
+      .result {
+        margin-top: 10px;
+        border-top: 1px dashed var(--line);
+        padding-top: 12px;
+      }
+
+      .item {
+        margin: 8px 0;
+        font-size: 0.96rem;
+      }
+
+      .value {
+        color: var(--ok);
+        font-weight: 700;
+      }
+
+      .error {
+        min-height: 20px;
+        margin: 6px 0 0;
+        color: #b91c1c;
+        font-size: 0.88rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="card">
+        <h1>农场作物成熟时间计算工具</h1>
+        <p class="sub">自动计算，无需点击按钮。</p>
+
+        <div class="field">
+          <label for="cropTime">作物基础成熟时间</label>
+          <select id="cropTime">
+            <option value="4">4小时</option>
+            <option value="8">8小时</option>
+            <option value="12">12小时</option>
+            <option value="24">24小时</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="landType">土地类型</label>
+          <select id="landType">
+            <option value="yellow">黄土地</option>
+            <option value="red">红土地</option>
+            <option value="black">黑土地</option>
+            <option value="gold">金土地</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="currentTime">当前时间</label>
+          <input id="currentTime" type="datetime-local" />
+        </div>
+
+        <p id="error" class="error"></p>
+
+        <div class="result">
+          <div class="item">
+            成熟所需时间：<span class="value" id="durationHours">-</span>
+          </div>
+          <div class="item">
+            成熟时间点：<span class="value" id="matureTime">-</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      // 土地加速系数
+      const LAND_FACTOR = {
+        yellow: 1.0,
+        red: 1.0,
+        black: 0.9,
+        gold: 0.8,
+      };
+
+      /**
+       * 数值保留小数，规避浮点误差。
+       * @param {number} value
+       * @param {number} digits
+       * @returns {number}
+       */
+      function roundTo(value, digits = 4) {
+        const power = 10 ** digits;
+        return Math.round((value + Number.EPSILON) * power) / power;
+      }
+
+      /**
+       * 格式化日期为 datetime-local 需要的 YYYY-MM-DDTHH:mm
+       * @param {Date} date
+       * @returns {string}
+       */
+      function formatForDatetimeLocal(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hour = String(date.getHours()).padStart(2, "0");
+        const minute = String(date.getMinutes()).padStart(2, "0");
+        return `${year}-${month}-${day}T${hour}:${minute}`;
+      }
+
+      /**
+       * 格式化日期输出 YYYY-MM-DD HH:mm
+       * @param {Date} date
+       * @returns {string}
+       */
+      function formatDateTime(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hour = String(date.getHours()).padStart(2, "0");
+        const minute = String(date.getMinutes()).padStart(2, "0");
+        return `${year}-${month}-${day} ${hour}:${minute}`;
+      }
+
+      /**
+       * 自动计算主逻辑（无需按钮）
+       */
+      function calculate() {
+        const cropTime = Number(document.getElementById("cropTime").value);
+        const landType = document.getElementById("landType").value;
+        const currentTimeInput = document.getElementById("currentTime").value;
+        const durationHoursEl = document.getElementById("durationHours");
+        const matureTimeEl = document.getElementById("matureTime");
+        const errorEl = document.getElementById("error");
+
+        errorEl.textContent = "";
+
+        const factor = LAND_FACTOR[landType];
+        if (!Number.isFinite(cropTime) || cropTime <= 0 || !factor) {
+          errorEl.textContent = "输入参数无效，请检查后重试。";
+          durationHoursEl.textContent = "-";
+          matureTimeEl.textContent = "-";
+          return;
+        }
+
+        // 最终成熟时间（小时）= 基础时间 × 加速系数
+        const matureHours = roundTo(cropTime * factor, 4);
+        durationHoursEl.textContent = `${matureHours.toFixed(1)} 小时`;
+
+        const startDate = new Date(currentTimeInput);
+        if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
+          errorEl.textContent = "当前时间无效，请重新选择。";
+          matureTimeEl.textContent = "-";
+          return;
+        }
+
+        // 小时 -> 毫秒：小时 * 60 * 60 * 1000
+        const matureMs = matureHours * 60 * 60 * 1000;
+        const matureDate = new Date(startDate.getTime() + matureMs);
+        matureTimeEl.textContent = formatDateTime(matureDate);
+      }
+
+      document.getElementById("cropTime").addEventListener("change", calculate);
+      document.getElementById("landType").addEventListener("change", calculate);
+      document.getElementById("currentTime").addEventListener("change", calculate);
+
+      window.addEventListener("DOMContentLoaded", () => {
+        // 页面加载时自动填充当前时间（datetime-local 不会自动填充）
+        document.getElementById("currentTime").value =
+          formatForDatetimeLocal(new Date());
+        calculate();
+      });
+    </script>
+  </body>
+</html>
