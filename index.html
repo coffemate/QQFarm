@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>农场作物成熟时间计算工具</title>
+    <style>
+      :root {
+        --bg: #f6f8fa;
+        --card: #ffffff;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --primary: #16a34a;
+        --primary-hover: #15803d;
+        --border: #d1d5db;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 32px auto;
+        padding: 0 16px;
+      }
+
+      .card {
+        background: var(--card);
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        padding: 20px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.6rem;
+      }
+
+      .desc {
+        margin: 0 0 20px;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      label {
+        font-size: 0.95rem;
+      }
+
+      select,
+      input,
+      button {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 0.95rem;
+      }
+
+      button {
+        cursor: pointer;
+        border: none;
+        background: var(--primary);
+        color: #fff;
+        font-weight: 600;
+      }
+
+      button:hover {
+        background: var(--primary-hover);
+      }
+
+      .actions {
+        margin-top: 16px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .secondary {
+        background: #e5e7eb;
+        color: #111827;
+      }
+
+      .secondary:hover {
+        background: #d1d5db;
+      }
+
+      .result {
+        margin-top: 20px;
+        border-top: 1px dashed var(--border);
+        padding-top: 16px;
+      }
+
+      .result h2 {
+        margin: 0 0 10px;
+        font-size: 1.15rem;
+      }
+
+      .output-box {
+        background: #f9fafb;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 10px;
+      }
+
+      .output-box p {
+        margin: 4px 0;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid #e5e7eb;
+        text-align: left;
+        padding: 8px 6px;
+        font-size: 0.92rem;
+      }
+
+      .note {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .error {
+        color: #b91c1c;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <h1>农场作物成熟时间计算工具</h1>
+        <p class="desc">
+          支持单块土地和批量地块计算；可输入当前时间并自动给出成熟时间点（含跨天显示）。
+        </p>
+
+        <div class="grid">
+          <div class="field">
+            <label for="baseTime">作物基础成熟时间</label>
+            <select id="baseTime">
+              <option value="4">4小时</option>
+              <option value="8">8小时</option>
+              <option value="12">12小时</option>
+              <option value="24">24小时</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="landType">土地类型</label>
+            <select id="landType">
+              <option value="yellow">黄土地（100%）</option>
+              <option value="red">红土地（100%）</option>
+              <option value="black">黑土地（90%）</option>
+              <option value="gold">金土地（80%）</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="currentTime">当前时间（可选）</label>
+            <input id="currentTime" type="datetime-local" />
+          </div>
+
+          <div class="field">
+            <label for="plotCount">地块数量（批量）</label>
+            <input id="plotCount" type="number" min="1" max="50" value="1" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="calcBtn">计算成熟时间</button>
+          <button class="secondary" id="resetBtn">重置</button>
+        </div>
+
+        <p class="note">
+          规则：黄/红土地无加速；黑土地提速10%（×0.9）；金土地提速20%（×0.8）。
+        </p>
+        <p class="error" id="error"></p>
+
+        <div class="result" id="result" hidden>
+          <h2>计算结果</h2>
+          <div class="output-box">
+            <p><strong>最终成熟时间（小时）:</strong> <span id="finalHours">-</span></p>
+            <p><strong>转换为时分:</strong> <span id="hourMinute">-</span></p>
+            <p><strong>成熟时间点:</strong> <span id="matureAt">未输入当前时间</span></p>
+          </div>
+
+          <div id="batchWrap" hidden>
+            <h2>批量计算明细</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>地块</th>
+                  <th>成熟时长</th>
+                  <th>时分格式</th>
+                  <th>成熟时间点</th>
+                </tr>
+              </thead>
+              <tbody id="batchTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 土地系数映射
+      const LAND_SPEED = {
+        yellow: { label: "黄土地", factor: 1.0 },
+        red: { label: "红土地", factor: 1.0 },
+        black: { label: "黑土地", factor: 0.9 },
+        gold: { label: "金土地", factor: 0.8 },
+      };
+
+      /**
+       * 处理浮点精度，避免 4 * 0.8 出现 3.2000000000000006 之类误差
+       * @param {number} num
+       * @param {number} digits
+       * @returns {number}
+       */
+      function roundTo(num, digits = 4) {
+        const p = 10 ** digits;
+        return Math.round((num + Number.EPSILON) * p) / p;
+      }
+
+      /**
+       * 核心计算逻辑：最终时间 = 基础时间 × 加速系数
+       * @param {number} baseHours
+       * @param {number} factor
+       * @returns {number}
+       */
+      function calcMatureHours(baseHours, factor) {
+        return roundTo(baseHours * factor, 4);
+      }
+
+      /**
+       * 小时转“X小时Y分钟”
+       * @param {number} hours
+       * @returns {{display: string, totalMinutes: number}}
+       */
+      function hoursToHourMinute(hours) {
+        const totalMinutes = Math.round(hours * 60);
+        const h = Math.floor(totalMinutes / 60);
+        const m = totalMinutes % 60;
+        return {
+          display: `${h}小时${m}分钟`,
+          totalMinutes,
+        };
+      }
+
+      /**
+       * 加上分钟得到成熟时间点，并自动格式化跨天
+       * @param {Date} startDate
+       * @param {number} totalMinutes
+       * @returns {string}
+       */
+      function calcMatureDateLabel(startDate, totalMinutes) {
+        const end = new Date(startDate.getTime() + totalMinutes * 60 * 1000);
+        const dayDiff = Math.floor(
+          (new Date(end.toDateString()) - new Date(startDate.toDateString())) /
+            (24 * 60 * 60 * 1000)
+        );
+        const datePart = end.toLocaleDateString("zh-CN", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        });
+        const timePart = end.toLocaleTimeString("zh-CN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
+
+        if (dayDiff <= 0) return `${datePart} ${timePart}（当天）`;
+        return `${datePart} ${timePart}（+${dayDiff}天）`;
+      }
+
+      const baseTimeEl = document.getElementById("baseTime");
+      const landTypeEl = document.getElementById("landType");
+      const currentTimeEl = document.getElementById("currentTime");
+      const plotCountEl = document.getElementById("plotCount");
+      const errorEl = document.getElementById("error");
+      const resultEl = document.getElementById("result");
+      const finalHoursEl = document.getElementById("finalHours");
+      const hourMinuteEl = document.getElementById("hourMinute");
+      const matureAtEl = document.getElementById("matureAt");
+      const batchWrapEl = document.getElementById("batchWrap");
+      const batchTableBodyEl = document.getElementById("batchTableBody");
+
+      function render() {
+        errorEl.textContent = "";
+
+        const baseHours = Number(baseTimeEl.value);
+        const landKey = landTypeEl.value;
+        const plotCount = Number(plotCountEl.value);
+
+        if (!LAND_SPEED[landKey]) {
+          errorEl.textContent = "土地类型无效，请重新选择。";
+          resultEl.hidden = true;
+          return;
+        }
+        if (!Number.isFinite(baseHours) || baseHours <= 0) {
+          errorEl.textContent = "基础成熟时间无效。";
+          resultEl.hidden = true;
+          return;
+        }
+        if (!Number.isInteger(plotCount) || plotCount < 1 || plotCount > 50) {
+          errorEl.textContent = "地块数量请输入 1 到 50 的整数。";
+          resultEl.hidden = true;
+          return;
+        }
+
+        const factor = LAND_SPEED[landKey].factor;
+        const matureHours = calcMatureHours(baseHours, factor);
+        const fixedOneDecimal = matureHours.toFixed(1);
+        const hm = hoursToHourMinute(matureHours);
+
+        finalHoursEl.textContent = `${fixedOneDecimal} 小时`;
+        hourMinuteEl.textContent = hm.display;
+
+        const currentTimeValue = currentTimeEl.value;
+        const hasCurrentTime = Boolean(currentTimeValue);
+        const startDate = hasCurrentTime ? new Date(currentTimeValue) : null;
+
+        if (hasCurrentTime && startDate instanceof Date && !isNaN(startDate)) {
+          matureAtEl.textContent = calcMatureDateLabel(startDate, hm.totalMinutes);
+        } else {
+          matureAtEl.textContent = "未输入当前时间";
+        }
+
+        // 批量计算：每个地块参数相同，输出编号与时间点
+        if (plotCount > 1) {
+          batchWrapEl.hidden = false;
+          batchTableBodyEl.innerHTML = "";
+          for (let i = 1; i <= plotCount; i++) {
+            const tr = document.createElement("tr");
+            const matureLabel =
+              hasCurrentTime && startDate && !isNaN(startDate)
+                ? calcMatureDateLabel(startDate, hm.totalMinutes)
+                : "未输入当前时间";
+            tr.innerHTML = `
+              <td>地块 ${i}</td>
+              <td>${fixedOneDecimal} 小时</td>
+              <td>${hm.display}</td>
+              <td>${matureLabel}</td>
+            `;
+            batchTableBodyEl.appendChild(tr);
+          }
+        } else {
+          batchWrapEl.hidden = true;
+          batchTableBodyEl.innerHTML = "";
+        }
+
+        resultEl.hidden = false;
+      }
+
+      document.getElementById("calcBtn").addEventListener("click", render);
+      document.getElementById("resetBtn").addEventListener("click", () => {
+        baseTimeEl.value = "4";
+        landTypeEl.value = "yellow";
+        currentTimeEl.value = "";
+        plotCountEl.value = "1";
+        errorEl.textContent = "";
+        resultEl.hidden = true;
+        batchTableBodyEl.innerHTML = "";
+        batchWrapEl.hidden = true;
+      });
+    </script>
+  </body>
+</html>
